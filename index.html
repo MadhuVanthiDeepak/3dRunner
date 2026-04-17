@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Runner 3D — ClaudeIntegrationProject</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0d18;
+  --accent: #5dcaa5;
+  --accent2: #7f77dd;
+  --danger: #e24b4a;
+  --warn: #f0c040;
+  --text: #e8e8f0;
+  --muted: rgba(232,232,240,0.45);
+  --card: rgba(255,255,255,0.05);
+  --border: rgba(255,255,255,0.08);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); }
+body { font-family:'Syne',sans-serif; color:var(--text); }
+#canvas-wrap { position:fixed; inset:0; }
+canvas { display:block; width:100%; height:100%; }
+
+/* ── HUD ── */
+#hud {
+  position:fixed; inset:0; pointer-events:none;
+  display:none;
+}
+#hud-top {
+  position:absolute; top:18px; left:50%; transform:translateX(-50%);
+  display:flex; align-items:center; gap:20px;
+  background:rgba(13,13,24,0.75); backdrop-filter:blur(8px);
+  border:0.5px solid var(--border); border-radius:40px;
+  padding:10px 28px; font-family:'Space Mono',monospace; font-size:13px;
+}
+.hud-item { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.hud-label { font-size:9px; letter-spacing:0.15em; color:var(--muted); text-transform:uppercase; }
+.hud-val { font-size:17px; font-weight:700; color:var(--accent); }
+.hud-sep { width:1px; height:32px; background:var(--border); }
+#lives-bar { display:flex; gap:5px; }
+.heart { font-size:16px; filter:grayscale(0); transition:filter 0.3s; }
+.heart.dead { filter:grayscale(1); opacity:0.3; }
+#combo-wrap {
+  position:absolute; top:78px; left:50%; transform:translateX(-50%);
+  font-family:'Space Mono',monospace; font-size:11px; color:var(--warn);
+  background:rgba(240,192,64,0.12); border:0.5px solid rgba(240,192,64,0.3);
+  border-radius:20px; padding:4px 16px; opacity:0; transition:opacity 0.3s;
+  letter-spacing:0.05em;
+}
+#combo-wrap.show { opacity:1; }
+
+#skill-banner {
+  position:absolute; bottom:120px; left:50%; transform:translateX(-50%);
+  font-family:'Space Mono',monospace; font-size:11px; color:var(--bg);
+  padding:6px 18px; border-radius:6px; opacity:0;
+  transition:opacity 0.2s; pointer-events:none; white-space:nowrap;
+  font-weight:700; letter-spacing:0.08em;
+}
+#skill-banner.show { opacity:1; }
+
+#level-announce {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  text-align:center; opacity:0; pointer-events:none;
+  transition:opacity 0.4s;
+}
+#level-announce h2 {
+  font-size:48px; font-weight:800; color:var(--accent);
+  text-shadow:0 0 40px rgba(93,202,165,0.6);
+  letter-spacing:-0.02em;
+}
+#level-announce p { font-size:14px; color:var(--muted); margin-top:4px; font-family:'Space Mono',monospace; }
+#level-announce.show { opacity:1; }
+
+/* mobile controls */
+#mobile-controls {
+  position:fixed; bottom:24px; left:0; right:0;
+  display:flex; justify-content:space-between; align-items:flex-end;
+  padding:0 24px; pointer-events:none;
+}
+.dpad { pointer-events:all; display:grid; grid-template-columns:repeat(3,44px); grid-template-rows:repeat(2,44px); gap:4px; }
+.dpad-btn {
+  background:rgba(255,255,255,0.07); border:0.5px solid var(--border);
+  border-radius:8px; color:var(--text); font-size:16px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  user-select:none; -webkit-user-select:none; pointer-events:all;
+  active-transform:scale(0.92);
+}
+.dpad-btn:active { background:rgba(93,202,165,0.2); border-color:var(--accent); }
+#jump-btn {
+  pointer-events:all; width:70px; height:70px;
+  background:rgba(93,202,165,0.15); border:1.5px solid var(--accent);
+  border-radius:50%; color:var(--accent); font-size:11px; font-weight:700;
+  font-family:'Space Mono',monospace; letter-spacing:0.05em;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  user-select:none; -webkit-user-select:none;
+}
+#jump-btn:active { background:rgba(93,202,165,0.35); }
+
+/* ── SCREENS ── */
+.screen {
+  position:fixed; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  background:rgba(13,13,24,0.92); backdrop-filter:blur(12px);
+  z-index:100; transition:opacity 0.4s;
+}
+.screen.hidden { opacity:0; pointer-events:none; }
+
+/* Title */
+#title-screen { gap:0; }
+#title-logo {
+  font-size:clamp(36px,8vw,72px); font-weight:800; letter-spacing:-0.04em;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text; line-height:1; margin-bottom:6px;
+}
+#title-sub {
+  font-family:'Space Mono',monospace; font-size:11px;
+  color:var(--muted); letter-spacing:0.3em; text-transform:uppercase;
+  margin-bottom:48px;
+}
+.title-features {
+  display:flex; gap:12px; flex-wrap:wrap; justify-content:center;
+  margin-bottom:48px;
+}
+.feat-tag {
+  background:var(--card); border:0.5px solid var(--border);
+  border-radius:20px; padding:6px 14px;
+  font-size:12px; font-family:'Space Mono',monospace;
+  color:var(--muted);
+}
+.feat-tag span { color:var(--accent); }
+.big-btn {
+  background:var(--accent); color:#0a2e22;
+  border:none; padding:16px 52px; border-radius:8px;
+  font-size:16px; font-weight:800; font-family:'Syne',sans-serif;
+  cursor:pointer; letter-spacing:0.02em; transition:transform 0.15s, box-shadow 0.15s;
+  box-shadow:0 0 30px rgba(93,202,165,0.3);
+}
+.big-btn:hover { transform:translateY(-2px); box-shadow:0 6px 40px rgba(93,202,165,0.45); }
+.big-btn:active { transform:scale(0.97); }
+.big-btn.danger { background:var(--danger); color:#fff; box-shadow:0 0 30px rgba(226,75,74,0.3); }
+.big-btn.danger:hover { box-shadow:0 6px 40px rgba(226,75,74,0.45); }
+
+/* Controls hint */
+#ctrl-hint {
+  margin-top:24px; font-family:'Space Mono',monospace; font-size:11px;
+  color:var(--muted); text-align:center; line-height:2;
+}
+kbd {
+  background:rgba(255,255,255,0.08); border:0.5px solid var(--border);
+  border-radius:4px; padding:2px 7px; font-family:'Space Mono',monospace;
+  font-size:11px; color:var(--text);
+}
+
+/* Game Over */
+#gameover-screen { gap:16px; }
+#gameover-title { font-size:clamp(40px,8vw,80px); font-weight:800; color:var(--danger); letter-spacing:-0.03em; line-height:1; }
+#final-score-wrap {
+  background:var(--card); border:0.5px solid var(--border);
+  border-radius:12px; padding:24px 48px; text-align:center;
+  font-family:'Space Mono',monospace;
+}
+#final-score-wrap .label { font-size:10px; letter-spacing:0.2em; color:var(--muted); text-transform:uppercase; margin-bottom:4px; }
+#final-score-val { font-size:52px; font-weight:700; color:var(--accent); }
+#highscore-note { font-size:12px; color:var(--warn); margin-top:8px; }
+.go-btns { display:flex; gap:12px; margin-top:8px; }
+
+/* Skills collected panel */
+#skills-panel {
+  position:fixed; right:18px; top:50%; transform:translateY(-50%);
+  display:none; flex-direction:column; gap:6px; pointer-events:none; z-index:50;
+}
+.skill-pip {
+  background:rgba(13,13,24,0.8); border:0.5px solid var(--border);
+  border-radius:6px; padding:4px 10px;
+  font-family:'Space Mono',monospace; font-size:10px; color:var(--muted);
+  display:flex; align-items:center; gap:6px;
+  transition:all 0.3s;
+}
+.skill-pip.collected { border-color:var(--accent); color:var(--accent); }
+.skill-pip .dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+/* Pause overlay */
+#pause-screen { gap:24px; }
+#pause-screen h2 { font-size:48px; font-weight:800; color:var(--text); letter-spacing:-0.03em; }
+
+/* Particles canvas */
+#particles { position:fixed; inset:0; pointer-events:none; z-index:10; }
+
+/* Minimap */
+#minimap {
+  position:fixed; bottom:110px; right:18px;
+  width:90px; height:90px;
+  background:rgba(13,13,24,0.8); border:0.5px solid var(--border);
+  border-radius:8px; overflow:hidden; display:none;
+}
+#minimap canvas { width:100%; height:100%; }
+
+@media (max-width:600px) {
+  #hud-top { font-size:11px; padding:8px 16px; gap:12px; }
+  .hud-val { font-size:15px; }
+  #skills-panel { display:none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- 3D Canvas -->
+<div id="canvas-wrap"><canvas id="c"></canvas></div>
+<!-- Particle layer -->
+<canvas id="particles"></canvas>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="hud-top">
+    <div class="hud-item">
+      <span class="hud-label">Score</span>
+      <span class="hud-val" id="hud-score">0</span>
+    </div>
+    <div class="hud-sep"></div>
+    <div class="hud-item">
+      <span class="hud-label">Level</span>
+      <span class="hud-val" id="hud-level">1</span>
+    </div>
+    <div class="hud-sep"></div>
+    <div class="hud-item">
+      <span class="hud-label">Blocks</span>
+      <span class="hud-val" id="hud-blocks">0/0</span>
+    </div>
+    <div class="hud-sep"></div>
+    <div class="hud-item">
+      <span class="hud-label">Lives</span>
+      <div id="lives-bar">
+        <span class="heart" id="h1">♥</span>
+        <span class="heart" id="h2">♥</span>
+        <span class="heart" id="h3">♥</span>
+      </div>
+    </div>
+  </div>
+  <div id="combo-wrap"><span id="combo-text">x2 COMBO</span></div>
+  <div id="skill-banner" id="skill-banner"></div>
+  <div id="level-announce">
+    <h2 id="la-title">LEVEL 1</h2>
+    <p id="la-sub">Collect all skill blocks!</p>
+  </div>
+</div>
+
+<!-- Skills panel -->
+<div id="skills-panel"></div>
+
+<!-- Minimap -->
+<div id="minimap"><canvas id="minimap-canvas"></canvas></div>
+
+<!-- Mobile controls -->
+<div id="mobile-controls">
+  <div class="dpad">
+    <div></div>
+    <button class="dpad-btn" id="mb-up">▲</button>
+    <div></div>
+    <button class="dpad-btn" id="mb-left">◀</button>
+    <button class="dpad-btn" id="mb-down">▼</button>
+    <button class="dpad-btn" id="mb-right">▶</button>
+  </div>
+  <button id="jump-btn">JUMP</button>
+</div>
+
+<!-- Title Screen -->
+<div class="screen" id="title-screen">
+  <div id="title-logo">PORTFOLIO<br>RUNNER 3D</div>
+  <div id="title-sub">ClaudeIntegrationProject</div>
+  <div class="title-features">
+    <div class="feat-tag"><span>10</span> Tech Skills</div>
+    <div class="feat-tag"><span>5</span> Levels</div>
+    <div class="feat-tag"><span>∞</span> Replayability</div>
+    <div class="feat-tag">Power-ups</div>
+    <div class="feat-tag">Combo System</div>
+    <div class="feat-tag">Boss Level</div>
+  </div>
+  <button class="big-btn" id="play-btn">▶ PLAY NOW</button>
+  <div id="ctrl-hint">
+    <kbd>↑↓←→</kbd> Move &nbsp;·&nbsp; <kbd>Space</kbd> Jump &nbsp;·&nbsp; <kbd>P</kbd> Pause<br>
+    Or use the on-screen D-pad on mobile
+  </div>
+</div>
+
+<!-- Game Over Screen -->
+<div class="screen hidden" id="gameover-screen">
+  <div id="gameover-title">GAME<br>OVER</div>
+  <div id="final-score-wrap">
+    <div class="label">Final Score</div>
+    <div id="final-score-val">0</div>
+    <div id="highscore-note"></div>
+  </div>
+  <div class="go-btns">
+    <button class="big-btn" id="retry-btn">↺ RETRY</button>
+    <button class="big-btn danger" id="menu-btn">MENU</button>
+  </div>
+</div>
+
+<!-- Pause Screen -->
+<div class="screen hidden" id="pause-screen">
+  <h2>PAUSED</h2>
+  <button class="big-btn" id="resume-btn">▶ RESUME</button>
+</div>
+
+<!-- Win Screen -->
+<div class="screen hidden" id="win-screen">
+  <div id="title-logo" style="background:linear-gradient(135deg,#f0c040,#e24b4a);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">YOU<br>WIN!</div>
+  <div id="final-score-wrap" style="margin-bottom:24px;">
+    <div class="label">Final Score</div>
+    <div id="win-score-val" style="font-size:52px;font-weight:700;color:#f0c040;font-family:'Space Mono',monospace;">0</div>
+    <div id="win-hs-note" style="font-size:12px;color:var(--accent);margin-top:8px;font-family:'Space Mono',monospace;"></div>
+  </div>
+  <div class="go-btns">
+    <button class="big-btn" id="win-retry-btn">↺ PLAY AGAIN</button>
+    <button class="big-btn danger" id="win-menu-btn">MENU</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════
+//  PORTFOLIO RUNNER 3D — Full Game
+// ═══════════════════════════════════════════════════
+
+const $ = id => document.getElementById(id);
+
+// ── Renderer ──────────────────────────────────────
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.setClearColor(0x0d0d18);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0d0d18, 0.03);
+
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 120);
+camera.position.set(0, 8, 14);
+
+function onResize(){
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w,h);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+  pCanvas.width = w; pCanvas.height = h;
+}
+window.addEventListener('resize', onResize);
+
+// ── Particles ────────────────────────────────────
+const pCanvas = $('particles');
+const pCtx = pCanvas.getContext('2d');
+const particles = [];
+function spawnParticles(x,y, color='#5dcaa5', count=12){
+  for(let i=0;i<count;i++){
+    const angle = Math.random()*Math.PI*2;
+    const speed = 1.5+Math.random()*3;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed - 2,
+      life:1, color, size:3+Math.random()*4
+    });
+  }
+}
+function tickParticles(){
+  pCtx.clearRect(0,0,pCanvas.width,pCanvas.height);
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.life-=0.025;
+    if(p.life<=0){ particles.splice(i,1); continue; }
+    pCtx.globalAlpha=p.life;
+    pCtx.fillStyle=p.color;
+    pCtx.beginPath();
+    pCtx.arc(p.x,p.y,p.size*p.life,0,Math.PI*2);
+    pCtx.fill();
+  }
+  pCtx.globalAlpha=1;
+}
+function world2screen(pos){
+  const v = pos.clone().project(camera);
+  return {
+    x: (v.x+1)/2*innerWidth,
+    y: (-v.y+1)/2*innerHeight
+  };
+}
+
+// ── Lighting ──────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff,0.3));
+const sun = new THREE.DirectionalLight(0xffeedd,1.1);
+sun.position.set(8,16,10); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near=0.5; sun.shadow.camera.far=60;
+sun.shadow.camera.left=-20; sun.shadow.camera.right=20;
+sun.shadow.camera.top=20; sun.shadow.camera.bottom=-20;
+scene.add(sun);
+const fillLight = new THREE.PointLight(0x7f77dd,1.5,40);
+fillLight.position.set(-6,4,-4);
+scene.add(fillLight);
+const rimLight = new THREE.PointLight(0x5dcaa5,0.8,30);
+rimLight.position.set(6,6,-10);
+scene.add(rimLight);
+
+// ── Floor ─────────────────────────────────────────
+const floorGroup = new THREE.Group();
+scene.add(floorGroup);
+const TILE_W=1, TILE_HALF=0.1;
+const tGeo = new THREE.BoxGeometry(TILE_W,TILE_HALF*2,TILE_W);
+const tMats = [
+  new THREE.MeshLambertMaterial({color:0x16162a}),
+  new THREE.MeshLambertMaterial({color:0x111122}),
+];
+const FLOOR_W=16, FLOOR_D=40;
+for(let x=-FLOOR_W;x<=FLOOR_W;x++){
+  for(let z=-4;z<=FLOOR_D;z++){
+    const t = new THREE.Mesh(tGeo, tMats[(x+z)%2===0?0:1]);
+    t.position.set(x,-0.7,z); t.receiveShadow=true;
+    floorGroup.add(t);
+  }
+}
+
+// Grid lines overlay
+const gridMat = new THREE.MeshBasicMaterial({color:0x5dcaa5,opacity:0.04,transparent:true});
+const gridGeo = new THREE.PlaneGeometry(32,44,32,44);
+const grid = new THREE.Mesh(gridGeo,gridMat);
+grid.rotation.x=-Math.PI/2; grid.position.y=-0.58;
+scene.add(grid);
+
+// ── Player ────────────────────────────────────────
+const playerGroup = new THREE.Group();
+scene.add(playerGroup);
+
+function mkMesh(geo,color,cast=true){
+  const m = new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color}));
+  if(cast) m.castShadow=true;
+  return m;
+}
+
+const bodyM = mkMesh(new THREE.BoxGeometry(0.72,0.88,0.72),0x5dcaa5);
+playerGroup.add(bodyM);
+const headM = mkMesh(new THREE.BoxGeometry(0.58,0.58,0.58),0x9fe1cb);
+headM.position.y=0.73;
+playerGroup.add(headM);
+// Eyes
+[[-.16,.08,.3],[.16,.08,.3]].forEach(([x,y,z])=>{
+  const e=mkMesh(new THREE.BoxGeometry(0.1,0.1,0.05),0x0a2e22);
+  e.position.set(x,y,z); headM.add(e);
+});
+// Arms
+[[-.5,0,0],[.5,0,0]].forEach(([x,y,z],i)=>{
+  const arm=mkMesh(new THREE.BoxGeometry(0.22,0.62,0.22),0x3daa85);
+  arm.position.set(x,y,z); playerGroup.add(arm);
+});
+// Legs
+const legL=mkMesh(new THREE.BoxGeometry(0.28,0.55,0.28),0x2a7a60);
+legL.position.set(-0.22,-0.72,0); playerGroup.add(legL);
+const legR=mkMesh(new THREE.BoxGeometry(0.28,0.55,0.28),0x2a7a60);
+legR.position.set(0.22,-0.72,0); playerGroup.add(legR);
+
+playerGroup.position.set(0,0,8);
+
+// ── Skills / Items ────────────────────────────────
+const SKILLS = [
+  {name:'React',   color:0x61dafb, bg:0x0e5a71},
+  {name:'Node.js', color:0x5fa04e, bg:0x1a3d16},
+  {name:'CSS',     color:0x2965f1, bg:0x0c1d6e},
+  {name:'TypeScript',color:0x3178c6,bg:0x0c2548},
+  {name:'Python',  color:0xffd43b, bg:0x4a3d00},
+  {name:'SQL',     color:0xe77c17, bg:0x5c2a00},
+  {name:'Git',     color:0xf05032, bg:0x6e1500},
+  {name:'Docker',  color:0x2496ed, bg:0x073a6e},
+  {name:'AI/ML',   color:0xaf99ec, bg:0x3a2870},
+  {name:'UX',      color:0xff6b9d, bg:0x6e1835},
+  {name:'AWS',     color:0xff9900, bg:0x6e3c00},
+  {name:'Vue',     color:0x42b883, bg:0x0e4d31},
+];
+const POWERUP_TYPES = ['shield','speed','magnet','double'];
+
+function makeSkillTexture(name,color,bg){
+  const c=document.createElement('canvas');
+  c.width=128;c.height=128;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#'+bg.toString(16).padStart(6,'0');
+  ctx.fillRect(0,0,128,128);
+  ctx.strokeStyle='#'+color.toString(16).padStart(6,'0');
+  ctx.lineWidth=3;
+  ctx.strokeRect(3,3,122,122);
+  ctx.fillStyle='#'+color.toString(16).padStart(6,'0');
+  ctx.font='bold '+( name.length>5?'18px':'22px')+" 'Space Mono',monospace";
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(name,64,64);
+  return new THREE.CanvasTexture(c);
+}
+
+function makePowerupTexture(type){
+  const icons={'shield':'🛡','speed':'⚡','magnet':'🧲','double':'×2'};
+  const colors={'shield':0x5dcaa5,'speed':0xf0c040,'magnet':0xaf99ec,'double':0xe24b4a};
+  const c=document.createElement('canvas');
+  c.width=128;c.height=128;
+  const ctx=c.getContext('2d');
+  const col=colors[type];
+  ctx.fillStyle='#'+col.toString(16).padStart(6,'0')+'33';
+  ctx.fillRect(0,0,128,128);
+  ctx.fillStyle='#'+col.toString(16).padStart(6,'0');
+  ctx.font='60px serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(icons[type],64,64);
+  return new THREE.CanvasTexture(c);
+}
+
+// ── Game State ────────────────────────────────────
+const GS = {
+  phase:'title', // title|playing|paused|gameover|win
+  px:0, pz:8, pvy:0, onGround:true,
+  score:0, lives:3, level:1,
+  combo:0, comboTimer:0, lastCollectTime:0,
+  items:[],  bugs:[], powerItems:[],
+  collected:0, totalItems:0,
+  // power-up states
+  shield:false, shieldTimer:0,
+  speed:false, speedTimer:0,
+  magnet:false, magnetTimer:0,
+  doubleScore:false, doubleTimer:0,
+  // camera
+  camTargetZ:14, camZ:14,
+  // animation
+  walkCycle:0, jumpStretch:1,
+  invincible:false, invinTimer:0,
+  highScore: parseInt(localStorage.getItem('pfr3d_hs')||'0'),
+  bugHitCooldown:0,
+};
+
+// ── Level Definitions ─────────────────────────────
+const LEVEL_DEFS = [
+  { skills:6,  bugs:2, powerups:1, theme:0x0d0d18, fogDensity:0.03, name:'First Steps',       sub:'Collect all skill blocks!' },
+  { skills:9,  bugs:3, powerups:2, theme:0x0d180d, fogDensity:0.028, name:'Building Skills',  sub:'Watch out for the bugs!' },
+  { skills:12, bugs:4, powerups:2, theme:0x180d0d, fogDensity:0.025, name:'Deep Work',        sub:'Combos score double!' },
+  { skills:14, bugs:5, powerups:3, theme:0x0d0d24, fogDensity:0.022, name:'Portfolio Ready',  sub:'Power-ups are your friend!' },
+  { skills:16, bugs:7, powerups:3, theme:0x1a100d, fogDensity:0.02,  name:'Final Boss',       sub:'Survive the bug swarm!' },
+];
+
+// ── Build Level ───────────────────────────────────
+const itemMeshes = [], bugMeshes = [], powerMeshes = [];
+
+function clearLevel(){
+  [...itemMeshes,...bugMeshes,...powerMeshes].forEach(m=>scene.remove(m));
+  itemMeshes.length=0; bugMeshes.length=0; powerMeshes.length=0;
+  GS.items=[]; GS.bugs=[]; GS.powerItems=[];
+}
+
+function buildLevel(lvl){
+  clearLevel();
+  const def = LEVEL_DEFS[Math.min(lvl-1, LEVEL_DEFS.length-1)];
+
+  // spawn items in a grid-like spread
+  for(let i=0;i<def.skills;i++){
+    const si = i % SKILLS.length;
+    const sk = SKILLS[si];
+    const col = i % 3;
+    const row = Math.floor(i/3);
+    const x = (col-1) * 4 + (Math.random()-0.5)*2.5;
+    const z = -5 - row*4 - Math.random()*2;
+
+    const geo = new THREE.BoxGeometry(0.75,0.75,0.75);
+    const tex = makeSkillTexture(sk.name, sk.color, sk.bg);
+    const mats = Array(6).fill(null).map((_,fi)=>
+      new THREE.MeshLambertMaterial({
+        color: sk.bg,
+        map: (fi===4||fi===5) ? tex : null
+      })
+    );
+    mats[0] = new THREE.MeshLambertMaterial({color:sk.bg, map:tex});
+    mats[1] = new THREE.MeshLambertMaterial({color:sk.bg, map:tex});
+    mats[2] = new THREE.MeshLambertMaterial({color:sk.bg, map:tex});
+    mats[3] = new THREE.MeshLambertMaterial({color:sk.bg, map:tex});
+    mats[4] = new THREE.MeshLambertMaterial({color:sk.bg, map:tex});
+    mats[5] = new THREE.MeshLambertMaterial({color:sk.bg, map:tex});
+
+    const mesh = new THREE.Mesh(geo, mats);
+    mesh.position.set(x,0.5,z);
+    mesh.castShadow=true;
+    scene.add(mesh);
+    itemMeshes.push(mesh);
+    GS.items.push({mesh,x,z,collected:false,skill:sk,index:i});
+  }
+
+  // glow rings under items
+  GS.items.forEach(it=>{
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.5,0.65,24),
+      new THREE.MeshBasicMaterial({color:it.skill.color,opacity:0.25,transparent:true,side:THREE.DoubleSide})
+    );
+    ring.rotation.x=-Math.PI/2; ring.position.set(it.x,-0.59,it.z);
+    scene.add(ring);
+  });
+
+  // spawn bugs
+  for(let i=0;i<def.bugs;i++){
+    const bugGroup = new THREE.Group();
+    const body = mkMesh(new THREE.SphereGeometry(0.38,12,8),0xe24b4a);
+    bugGroup.add(body);
+    // spots
+    [[-0.15,0.2,0.3],[0.15,0.2,0.3]].forEach(([bx,by,bz])=>{
+      const s=mkMesh(new THREE.SphereGeometry(0.08,6,4),0xffffff);
+      s.position.set(bx,by,bz); bugGroup.add(s);
+    });
+    // legs
+    for(let j=0;j<4;j++){
+      const legG=new THREE.BoxGeometry(0.06,0.45,0.06);
+      const side=j<2?-1:1;
+      const zOff=-0.1+(j%2)*0.2;
+      const leg=mkMesh(legG,0xa32d2d);
+      leg.position.set(side*0.45,-0.15,zOff);
+      leg.rotation.z=side*Math.PI/4;
+      bugGroup.add(leg);
+    }
+    // antennae
+    [[-0.18,0.3,0.25],[0.18,0.3,0.25]].forEach(([bx,by,bz])=>{
+      const ant=mkMesh(new THREE.CylinderGeometry(0.02,0.02,0.3),0xc05040);
+      ant.position.set(bx,by,bz); ant.rotation.x=0.4;
+      bugGroup.add(ant);
+    });
+
+    const spread = FLOOR_W*0.7;
+    const bx = (Math.random()-0.5)*spread;
+    const bz = -8 - i*5 - Math.random()*3;
+    bugGroup.position.set(bx,0.35,bz);
+    bugGroup.castShadow=true;
+    scene.add(bugGroup);
+    bugMeshes.push(bugGroup);
+    GS.bugs.push({
+      mesh:bugGroup, x:bx, z:bz,
+      dir: Math.random()>0.5?1:-1,
+      speed: 0.04+Math.random()*0.03 + (lvl-1)*0.008,
+      phase: Math.random()*Math.PI*2
+    });
+  }
+
+  // power-ups
+  for(let i=0;i<def.powerups;i++){
+    const type = POWERUP_TYPES[i % POWERUP_TYPES.length];
+    const pColors={'shield':0x5dcaa5,'speed':0xf0c040,'magnet':0xaf99ec,'double':0xe24b4a};
+    const tex = makePowerupTexture(type);
+    const pMesh = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.55),
+      new THREE.MeshLambertMaterial({color:pColors[type],map:tex,emissive:pColors[type],emissiveIntensity:0.3})
+    );
+    const px = (Math.random()-0.5)*10;
+    const pz = -10 - i*7 - Math.random()*3;
+    pMesh.position.set(px,0.8,pz);
+    pMesh.castShadow=true;
+    scene.add(pMesh);
+    powerMeshes.push(pMesh);
+    GS.powerItems.push({mesh:pMesh,x:px,z:pz,collected:false,type,pColor:pColors[type]});
+  }
+
+  GS.totalItems = def.skills;
+  GS.collected = 0;
+  rebuildSkillsPanel();
+  updateMinimapItems();
+}
+
+// ── Skills Panel ──────────────────────────────────
+function rebuildSkillsPanel(){
+  const panel = $('skills-panel');
+  panel.innerHTML='';
+  const def = LEVEL_DEFS[Math.min(GS.level-1,LEVEL_DEFS.length-1)];
+  for(let i=0;i<def.skills;i++){
+    const si=i%SKILLS.length;
+    const pip=document.createElement('div');
+    pip.className='skill-pip'; pip.id='pip-'+i;
+    pip.innerHTML=`<span class="dot"></span>${SKILLS[si].name}`;
+    panel.appendChild(pip);
+  }
+}
+
+// ── Minimap ───────────────────────────────────────
+const mmCanvas = $('minimap-canvas');
+const mmCtx = mmCanvas.getContext('2d');
+mmCanvas.width=90; mmCanvas.height=90;
+function drawMinimap(){
+  mmCtx.clearRect(0,0,90,90);
+  mmCtx.fillStyle='rgba(13,13,24,0.9)';
+  mmCtx.fillRect(0,0,90,90);
+  const toMM=(wx,wz)=>({
+    x:45+(wx/FLOOR_W)*40,
+    y:45+((wz-GS.pz+5)/30)*40
+  });
+  // items
+  GS.items.forEach(it=>{
+    if(it.collected)return;
+    const p=toMM(it.x,it.z);
+    mmCtx.fillStyle='#'+it.skill.color.toString(16).padStart(6,'0')+'cc';
+    mmCtx.fillRect(p.x-2,p.y-2,4,4);
+  });
+  // bugs
+  GS.bugs.forEach(b=>{
+    const p=toMM(b.x,b.z);
+    mmCtx.fillStyle='#e24b4acc';
+    mmCtx.beginPath();
+    mmCtx.arc(p.x,p.y,3,0,Math.PI*2);
+    mmCtx.fill();
+  });
+  // player
+  const pp=toMM(GS.px,GS.pz);
+  mmCtx.fillStyle='#5dcaa5';
+  mmCtx.beginPath();
+  mmCtx.arc(pp.x,pp.y,4,0,Math.PI*2);
+  mmCtx.fill();
+}
+function updateMinimapItems(){}
+
+// ── Input ─────────────────────────────────────────
+const keys={};
+document.addEventListener('keydown',e=>{
+  keys[e.code]=true;
+  if(e.code==='Space'){e.preventDefault();}
+  if(e.code==='KeyP'||e.code==='Escape') togglePause();
+});
+document.addEventListener('keyup',e=>keys[e.code]=false);
+
+let jumpPressed=false;
+// Mobile buttons
+const mobileMap={
+  'mb-up':'ArrowUp','mb-down':'ArrowDown',
+  'mb-left':'ArrowLeft','mb-right':'ArrowRight'
+};
+Object.entries(mobileMap).forEach(([id,code])=>{
+  const el=$(id);
+  el.addEventListener('touchstart',e=>{keys[code]=true;e.preventDefault();},{passive:false});
+  el.addEventListener('touchend',()=>keys[code]=false);
+  el.addEventListener('mousedown',()=>keys[code]=true);
+  el.addEventListener('mouseup',()=>keys[code]=false);
+});
+$('jump-btn').addEventListener('touchstart',e=>{jumpPressed=true;e.preventDefault();},{passive:false});
+$('jump-btn').addEventListener('click',()=>{jumpPressed=true;});
+
+// ── UI Buttons ────────────────────────────────────
+$('play-btn').addEventListener('click',()=>startGame());
+$('retry-btn').addEventListener('click',()=>{ hideScreen('gameover-screen'); startGame(); });
+$('menu-btn').addEventListener('click',()=>{ hideScreen('gameover-screen'); showScreen('title-screen'); });
+$('resume-btn').addEventListener('click',()=>togglePause());
+$('win-retry-btn').addEventListener('click',()=>{ hideScreen('win-screen'); startGame(); });
+$('win-menu-btn').addEventListener('click',()=>{ hideScreen('win-screen'); showScreen('title-screen'); });
+
+function showScreen(id){ $(id).classList.remove('hidden'); }
+function hideScreen(id){ $(id).classList.add('hidden'); }
+function togglePause(){
+  if(GS.phase==='playing'){ GS.phase='paused'; showScreen('pause-screen'); }
+  else if(GS.phase==='paused'){ GS.phase='playing'; hideScreen('pause-screen'); }
+}
+
+// ── Game Flow ─────────────────────────────────────
+function startGame(){
+  GS.score=0; GS.lives=3; GS.level=1;
+  GS.combo=0; GS.comboTimer=0;
+  GS.shield=false; GS.speed=false; GS.magnet=false; GS.doubleScore=false;
+  GS.px=0; GS.pz=8; GS.pvy=0; GS.onGround=true;
+  playerGroup.position.set(0,0,8);
+  GS.invincible=false; GS.bugHitCooldown=0;
+  GS.phase='playing';
+  hideScreen('title-screen');
+  $('hud').style.display='block';
+  $('skills-panel').style.display='flex';
+  $('minimap').style.display='block';
+  $('mobile-controls').style.display='flex';
+  buildLevel(1);
+  announceLevel(1);
+  updateHUD();
+}
+
+function announceLevel(n){
+  const def=LEVEL_DEFS[Math.min(n-1,LEVEL_DEFS.length-1)];
+  const la=$('level-announce');
+  $('la-title').textContent=`LEVEL ${n} — ${def.name.toUpperCase()}`;
+  $('la-sub').textContent=def.sub;
+  la.classList.add('show');
+  setTimeout(()=>la.classList.remove('show'),2200);
+}
+
+function showSkillBanner(name,color){
+  const b=$('skill-banner');
+  b.textContent=`+ ${name}`;
+  b.style.background='#'+color.toString(16).padStart(6,'0');
+  b.classList.add('show');
+  setTimeout(()=>b.classList.remove('show'),1000);
+}
+
+function updateHUD(){
+  $('hud-score').textContent=GS.score.toLocaleString();
+  $('hud-level').textContent=GS.level;
+  $('hud-blocks').textContent=`${GS.collected}/${GS.totalItems}`;
+  ['h1','h2','h3'].forEach((id,i)=>{
+    $(id).classList.toggle('dead', i >= GS.lives);
+  });
+}
+
+function doGameOver(){
+  GS.phase='gameover';
+  $('hud').style.display='none';
+  $('skills-panel').style.display='none';
+  $('minimap').style.display='none';
+  $('mobile-controls').style.display='none';
+  const isHigh = GS.score > GS.highScore;
+  if(isHigh){ GS.highScore=GS.score; localStorage.setItem('pfr3d_hs',GS.score); }
+  $('final-score-val').textContent=GS.score.toLocaleString();
+  $('highscore-note').textContent = isHigh ? '★ NEW HIGH SCORE!' : `Best: ${GS.highScore.toLocaleString()}`;
+  showScreen('gameover-screen');
+}
+
+function doWin(){
+  GS.phase='win';
+  $('hud').style.display='none';
+  $('skills-panel').style.display='none';
+  $('minimap').style.display='none';
+  $('mobile-controls').style.display='none';
+  const isHigh = GS.score > GS.highScore;
+  if(isHigh){ GS.highScore=GS.score; localStorage.setItem('pfr3d_hs',GS.score); }
+  $('win-score-val').textContent=GS.score.toLocaleString();
+  $('win-hs-note').textContent = isHigh ? '★ NEW HIGH SCORE!' : `Best: ${GS.highScore.toLocaleString()}`;
+  showScreen('win-screen');
+}
+
+// ── Power-up Handling ─────────────────────────────
+function activatePowerup(type){
+  const durations={shield:600,speed:400,magnet:500,double:700};
+  const colors={shield:'#5dcaa5',speed:'#f0c040',magnet:'#af99ec',double:'#e24b4a'};
+  const msgs={shield:'🛡 SHIELD ON!',speed:'⚡ SPEED BOOST!',magnet:'🧲 MAGNET!',double:'×2 DOUBLE SCORE!'};
+  if(type==='shield'){ GS.shield=true; GS.shieldTimer=durations.shield; }
+  if(type==='speed'){  GS.speed=true;  GS.speedTimer=durations.speed; }
+  if(type==='magnet'){ GS.magnet=true; GS.magnetTimer=durations.magnet; }
+  if(type==='double'){ GS.doubleScore=true; GS.doubleTimer=durations.double; }
+  const b=$('skill-banner');
+  b.textContent=msgs[type];
+  b.style.background=colors[type];
+  b.classList.add('show');
+  setTimeout(()=>b.classList.remove('show'),1200);
+}
+
+// ── Main Loop ─────────────────────────────────────
+let frame=0, lastT=0;
+const GRAVITY=-0.022;
+const JUMP=0.3;
+const BASE_SPEED=0.11;
+const MAX_X=FLOOR_W-1;
+
+function tick(t=0){
+  requestAnimationFrame(tick);
+  const dt=Math.min((t-lastT)/16.67,3); lastT=t;
+  frame++;
+
+  if(GS.phase==='playing') update(dt);
+
+  // ambient animations always run
+  animateScene(t);
+  tickParticles();
+  drawMinimap();
+  renderer.render(scene,camera);
+}
+
+function update(dt){
+  // timers
+  if(GS.shieldTimer>0){ GS.shieldTimer-=dt; if(GS.shieldTimer<=0) GS.shield=false; }
+  if(GS.speedTimer>0){  GS.speedTimer-=dt;  if(GS.speedTimer<=0)  GS.speed=false; }
+  if(GS.magnetTimer>0){ GS.magnetTimer-=dt; if(GS.magnetTimer<=0) GS.magnet=false; }
+  if(GS.doubleTimer>0){ GS.doubleTimer-=dt; if(GS.doubleTimer<=0) GS.doubleScore=false; }
+  if(GS.invinTimer>0){ GS.invinTimer-=dt; if(GS.invinTimer<=0){ GS.invincible=false; playerGroup.visible=true; } }
+  if(GS.invincible) playerGroup.visible = frame%6<3;
+  if(GS.bugHitCooldown>0) GS.bugHitCooldown-=dt;
+  if(GS.comboTimer>0){ GS.comboTimer-=dt; if(GS.comboTimer<=0){ GS.combo=0; $('combo-wrap').classList.remove('show'); } }
+
+  // input
+  const spd = (GS.speed ? BASE_SPEED*1.8 : BASE_SPEED)*dt;
+  let moved=false;
+  if(keys['ArrowLeft']||keys['KeyA']){  GS.px=Math.max(GS.px-spd,-MAX_X); moved=true; playerGroup.rotation.y=Math.PI/2; }
+  if(keys['ArrowRight']||keys['KeyD']){ GS.px=Math.min(GS.px+spd, MAX_X); moved=true; playerGroup.rotation.y=-Math.PI/2; }
+  if(keys['ArrowUp']||keys['KeyW']){    GS.pz-=spd;                         moved=true; playerGroup.rotation.y=Math.PI; }
+  if(keys['ArrowDown']||keys['KeyS']){  GS.pz=Math.min(GS.pz+spd*0.6,10);  moved=true; playerGroup.rotation.y=0; }
+
+  if((keys['Space']||jumpPressed)&&GS.onGround){
+    GS.pvy=JUMP; GS.onGround=false;
+    spawnParticles(innerWidth/2,innerHeight*0.65,'#5dcaa5',8);
+  }
+  jumpPressed=false;
+
+  // physics
+  GS.pvy+=GRAVITY*dt;
+  let ny=playerGroup.position.y+GS.pvy*dt;
+  if(ny<=0){ ny=0; GS.pvy=0; GS.onGround=true; }
+
+  // walk animation
+  if(moved&&GS.onGround){ GS.walkCycle+=0.18*dt; }
+  else { GS.walkCycle*=0.85; }
+  legL.rotation.x=Math.sin(GS.walkCycle)*0.5;
+  legR.rotation.x=-Math.sin(GS.walkCycle)*0.5;
+
+  // jump stretch
+  const targetStretch = GS.onGround?1:(GS.pvy>0?1.2:0.85);
+  GS.jumpStretch+=(targetStretch-GS.jumpStretch)*0.2;
+  bodyM.scale.y=GS.jumpStretch; bodyM.scale.x=1/Math.sqrt(GS.jumpStretch);
+
+  playerGroup.position.set(GS.px,ny,GS.pz);
+
+  // camera follow — smooth
+  GS.camZ=GS.camZ+(GS.pz+12-GS.camZ)*0.07;
+  camera.position.z=GS.camZ;
+  camera.position.x+=(GS.px*0.25-camera.position.x)*0.06;
+  camera.position.y=8+ny*0.3;
+  camera.lookAt(GS.px*0.15, ny*0.2, GS.pz);
+
+  // scroll floor
+  floorGroup.position.z=GS.pz-10;
+  grid.position.z=GS.pz;
+
+  // magnet: pull items closer
+  if(GS.magnet){
+    GS.items.forEach(it=>{
+      if(it.collected)return;
+      const dx=GS.px-it.mesh.position.x;
+      const dz=GS.pz-it.mesh.position.z;
+      const dist=Math.sqrt(dx*dx+dz*dz);
+      if(dist<5){
+        it.mesh.position.x+=dx*0.05*dt;
+        it.mesh.position.z+=dz*0.05*dt;
+        it.x=it.mesh.position.x;
+        it.z=it.mesh.position.z;
+      }
+    });
+  }
+
+  // collect items
+  GS.items.forEach(it=>{
+    if(it.collected)return;
+    const dx=GS.px-it.mesh.position.x;
+    const dz=GS.pz-it.mesh.position.z;
+    const dy=ny-it.mesh.position.y;
+    if(Math.abs(dx)<0.75&&Math.abs(dz)<0.75&&Math.abs(dy)<0.85){
+      it.collected=true;
+      scene.remove(it.mesh);
+      GS.collected++;
+
+      // combo
+      const now=frame;
+      if(now-GS.lastCollectTime<90){ GS.combo=Math.min(GS.combo+1,8); }
+      else { GS.combo=1; }
+      GS.lastCollectTime=now;
+      GS.comboTimer=90;
+      if(GS.combo>1){
+        $('combo-text').textContent=`×${GS.combo} COMBO`;
+        $('combo-wrap').classList.add('show');
+      }
+
+      const pts=10*(GS.level)*(GS.doubleScore?2:1)*GS.combo;
+      GS.score+=pts;
+      showSkillBanner(it.skill.name, it.skill.color);
+      // particle burst at screen position
+      const sp=world2screen(it.mesh.position);
+      spawnParticles(sp.x,sp.y,'#'+it.skill.color.toString(16).padStart(6,'0'),16);
+      const pip=$('pip-'+it.index);
+      if(pip) pip.classList.add('collected');
+      updateHUD();
+    }
+  });
+
+  // collect power-ups
+  GS.powerItems.forEach(pw=>{
+    if(pw.collected)return;
+    const dx=GS.px-pw.mesh.position.x;
+    const dz=GS.pz-pw.mesh.position.z;
+    const dy=ny-pw.mesh.position.y;
+    if(Math.abs(dx)<0.85&&Math.abs(dz)<0.85&&Math.abs(dy)<1){
+      pw.collected=true;
+      scene.remove(pw.mesh);
+      activatePowerup(pw.type);
+      const sp=world2screen(pw.mesh.position);
+      spawnParticles(sp.x,sp.y,'#'+pw.pColor.toString(16).padStart(6,'0'),20);
+    }
+  });
+
+  // bug movement + collision
+  GS.bugs.forEach(b=>{
+    b.phase+=0.04*dt;
+    b.x+=b.dir*b.speed*dt;
+    b.z+=Math.sin(b.phase)*0.02;
+    if(b.x>MAX_X||b.x<-MAX_X){ b.dir*=-1; b.mesh.rotation.y=b.dir>0?0:Math.PI; }
+    b.mesh.position.set(b.x, 0.35+Math.abs(Math.sin(b.phase*2))*0.1, b.z);
+    b.mesh.rotation.y=b.dir>0?0:Math.PI;
+
+    if(!GS.invincible&&GS.bugHitCooldown<=0){
+      const dx=GS.px-b.x;
+      const dz=GS.pz-b.z;
+      if(Math.abs(dx)<0.75&&Math.abs(dz)<0.75){
+        if(GS.shield){
+          GS.shield=false; GS.shieldTimer=0;
+          spawnParticles(innerWidth/2,innerHeight/2,'#5dcaa5',20);
+        } else {
+          GS.lives--;
+          GS.invincible=true; GS.invinTimer=120;
+          GS.bugHitCooldown=60;
+          updateHUD();
+          if(GS.lives<=0){ doGameOver(); }
+        }
+      }
+    }
+  });
+
+  // level complete?
+  const remaining=GS.items.filter(it=>!it.collected).length;
+  if(remaining===0&&GS.items.length>0){
+    if(GS.level>=5){
+      GS.score+=500; doWin();
+    } else {
+      GS.score+=100*GS.level;
+      GS.level++;
+      buildLevel(GS.level);
+      announceLevel(GS.level);
+      GS.px=0; GS.pz=8; GS.pvy=0; GS.onGround=true;
+      playerGroup.position.set(0,0,8);
+      updateHUD();
+    }
+  }
+}
+
+// ── Ambient Animations ────────────────────────────
+function animateScene(t){
+  const s=t/1000;
+  // rotate & bob items
+  GS.items.forEach((it,i)=>{
+    if(it.collected)return;
+    it.mesh.rotation.y+=0.025;
+    it.mesh.rotation.x=Math.sin(s*1.2+i)*0.12;
+    it.mesh.position.y=0.5+Math.sin(s*1.8+i*0.7)*0.15;
+  });
+  // spin power-ups
+  GS.powerItems.forEach((pw,i)=>{
+    if(pw.collected)return;
+    pw.mesh.rotation.y+=0.04;
+    pw.mesh.rotation.x+=0.02;
+    pw.mesh.position.y=0.9+Math.sin(s*2.2+i)*0.2;
+  });
+  // lights drift
+  fillLight.position.x=Math.sin(s*0.4)*8;
+  fillLight.position.z=Math.cos(s*0.3)*6-6;
+  rimLight.position.x=Math.cos(s*0.25)*7;
+  // shield glow on player
+  if(GS.shield){
+    bodyM.material.emissive = new THREE.Color(0x5dcaa5);
+    bodyM.material.emissiveIntensity=0.3+Math.sin(s*6)*0.2;
+  } else {
+    bodyM.material.emissiveIntensity=0;
+  }
+  // speed trail
+  if(GS.speed){
+    headM.material.emissive=new THREE.Color(0xf0c040);
+    headM.material.emissiveIntensity=0.5+Math.sin(s*8)*0.3;
+  } else {
+    headM.material.emissiveIntensity=0;
+  }
+}
+
+// ── Boot ──────────────────────────────────────────
+onResize();
+tick();
+</script>
+</body>
+</html>
